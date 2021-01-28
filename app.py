@@ -14,18 +14,21 @@ def page_collection(soup): ##Collects One Page of Results
     for entry in soup_list_of_results:
         result_dict = {}
         title_a_tag = entry.find('a', class_ = 'result-title hdrlnk')
-        meta_data = entry.find('span', class_ = 'result-meta')
+        span_lists = entry.find('span', class_ = 'result-meta').find_all('span')
 
         result_dict['link'] = title_a_tag['href']
         result_dict['title'] = title_a_tag.text
-        result_dict['price'] = meta_data.find('span', class_ = 'result-price').text
-        result_dict['city'] = meta_data.find_next('span', class_ = 'result-hood').text.replace('(', '').replace(')', '').strip().title()
-
-        ##Squarefootage Parse
-        housing_text = meta_data.find_next('span', class_ = 'housing').text
-        dash_position = housing_text.index('-')
-        square_footage_text = housing_text[dash_position:].replace('-', '').strip()
-        result_dict['square_footage'] = square_footage_text
+        for span in span_lists:
+            if span['class'][0] == 'result-price':
+                result_dict['price'] = span.text
+            elif span['class'][0] == 'result-hood':
+                result_dict['city'] = span.text.replace('(', '').replace(')', '').strip().title()
+            elif span['class'][0] == 'housing':
+                ##Squarefootage Parse
+                housing_text = span.text
+                dash_position = housing_text.index('-')
+                square_footage_text = housing_text[dash_position:].replace('-', '').strip()
+                result_dict['square_footage'] = square_footage_text
         
         list_of_results.append(result_dict)
     return list_of_results
@@ -62,9 +65,14 @@ def individual(listing_url): ##Collects Individual Page Detail
     return dict_of_all
 
 
-def county_collector(location): ##Collects All Pages of results and individual page detail
+def county_collector(location, listing_type): ##Collects All Pages of results and individual page detail
+    listing_type = listing_type.lower().strip()
+    if listing_type == 'rent':
+        search = 'apa'
+    elif listing_type == 'buy':
+        search = 'reo'
     start = '0'
-    url = f'https://{location}.craigslist.org/search/apa?s={start}&availabilityMode=0&housing_type=6&sale_date=all+dates'
+    url = f'https://{location}.craigslist.org/search/{search}?s={start}&availabilityMode=0&housing_type=6&sale_date=all+dates&postedToday=1'
     html = requests.get(url).text
     soup = BeautifulSoup(html, 'html.parser')
     range_to = int(soup.find('span', class_ = 'rangeTo').text)
@@ -73,7 +81,7 @@ def county_collector(location): ##Collects All Pages of results and individual p
     while total_count != range_to:
         try: 
             start = range_to
-            url = f'https://{location}.craigslist.org/search/apa?s={start}&availabilityMode=0&housing_type=6&sale_date=all+dates'
+            url = f'https://{location}.craigslist.org/search/{search}?s={start}&availabilityMode=0&housing_type=6&sale_date=all+dates&postedToday=1'
             html = requests.get(url).text
             soup = BeautifulSoup(html, 'html.parser')
             page_list = page_collection(soup)
@@ -90,6 +98,7 @@ def county_collector(location): ##Collects All Pages of results and individual p
 
 
 location = 'orangecounty'
-all_list = county_collector(location)
+listing_type = 'buy'
+all_list = county_collector(location, listing_type)
 housing_rent = pd.DataFrame(all_list)
-housing_rent.to_csv(r'data\{}.csv'.format(location), index=False)
+housing_rent.to_csv(r'data\{}_{}.csv'.format(location, listing_type), index=False)
